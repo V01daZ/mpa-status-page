@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>MPA VPN Status</title>
+    <style>
+        body { background: #0f172a; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { text-align: center; border: 1px solid #334155; padding: 40px; border-radius: 20px; background: #1e293b; width: 300px; }
+        #status { font-size: 32px; font-weight: bold; margin: 20px 0; }
+        .online { color: #10b981; text-shadow: 0 0 15px #10b98166; }
+        .offline { color: #ef4444; text-shadow: 0 0 15px #ef444466; }
+        .info { color: #94a3b8; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div>MPA PRIVATE ACCESS</div>
+        <div id="status">ЗАГРУЗКА...</div>
+        <div class="info">Сервер: Финляндия 🇫🇮</div>
+    </div>
+
+    <script>
+        async function checkStatus() {
+            const url = "https://dominant-tortoise-117825.upstash.io/get/last_seen";
+            const token = "ggAAAAAAAcxBAAIgcDEXUJ2U4G-fwQyMtgpBOfqlSdIMRbK9x7vrEadr0Rm8lg";
+            
+            try {
+                const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+                const data = await response.json();
+                const lastSeen = parseInt(data.result || 0);
+                const now = Date.now();
+
+                const statusEl = document.getElementById('status');
+                // Если пинг был меньше 5 минут назад (300 000 мс)
+                if (now - lastSeen < 300000) {
+                    statusEl.innerText = "● ONLINE";
+                    statusEl.className = "online";
+                } else {
+                    statusEl.innerText = "● OFFLINE";
+                    statusEl.className = "offline";
+                }
+            } catch (e) {
+                document.getElementById('status').innerText = "ОШИБКА";
+            }
+        }
+        checkStatus();
+        setInterval(checkStatus, 30000); // Обновлять каждые 30 сек
+    </script>
+</body>
+</html>
