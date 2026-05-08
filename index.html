@@ -146,14 +146,14 @@ async function checkStatus() {
         const uptimeText = document.getElementById('uptime-text');
 
         if (online) {
-            statusText.textContent = 'Operational';
+            statusText.textContent = 'Online';
             statusText.style.color = '#10b981';
             dotWrap.style.background = 'rgba(16,185,129,0.15)';
             dotWrap.style.border = '1px solid rgba(16,185,129,0.3)';
             dot.style.background = '#10b981';
             mainCard.style.borderColor = 'rgba(16,185,129,0.2)';
         } else {
-            statusText.textContent = 'Degraded';
+            statusText.textContent = 'Offline';
             statusText.style.color = '#ef4444';
             dotWrap.style.background = 'rgba(239,68,68,0.15)';
             dotWrap.style.border = '1px solid rgba(239,68,68,0.3)';
