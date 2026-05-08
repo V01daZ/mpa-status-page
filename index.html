@@ -150,14 +150,14 @@ async function checkStatus() {
         const uptimeText = document.getElementById('uptime-text');
 
         if (online) {
-            statusText.textContent = 'Operational';
+            statusText.textContent = 'Online';
             statusText.style.color = ONLINE_COLOR;
             dotWrap.style.background = 'rgba(168,85,247,0.15)';
             dotWrap.style.border = '1px solid rgba(168,85,247,0.3)';
             dot.style.background = ONLINE_COLOR;
             mainCard.style.borderColor = 'rgba(168,85,247,0.25)';
         } else {
-            statusText.textContent = 'Degraded';
+            statusText.textContent = 'Offline';
             statusText.style.color = OFFLINE_COLOR;
             dotWrap.style.background = 'rgba(239,68,68,0.15)';
             dotWrap.style.border = '1px solid rgba(239,68,68,0.3)';
