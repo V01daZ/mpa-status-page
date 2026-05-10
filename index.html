@@ -30,7 +30,7 @@
             border-radius: 8px;
             display: flex; align-items: center; justify-content: center;
         }
-        .logo-text { color: white; font-size: 18px; font-weight: 500; letter-spacing: -0.3px; }
+        .logo-text { color: white; font-size: 18px; font-weight: 500; }
         .subtitle { color: #64748b; font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; }
         .card {
             background: #1a1025;
@@ -54,14 +54,83 @@
             background: #2d1f42;
             display: flex; align-items: center; justify-content: center;
             transition: background 0.5s, border 0.5s;
+            position: relative;
         }
-        .dot { width: 16px; height: 16px; border-radius: 50%; background: #64748b; transition: background 0.5s; }
-        .divider { border-top: 1px solid #2d1f42; padding-top: 1.25rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .dot {
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: #64748b;
+            transition: background 0.5s;
+            position: relative;
+            z-index: 1;
+        }
+        .pulse {
+            position: absolute;
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            background: transparent;
+            z-index: 0;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2.8); opacity: 0; }
+        }
+        .pulse-active {
+            animation: pulse 1.5s ease-out infinite;
+        }
+        .divider {
+            border-top: 1px solid #2d1f42;
+            padding-top: 1.25rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
         .meta-label { color: #64748b; font-size: 11px; margin-bottom: 4px; letter-spacing: 0.5px; }
         .meta-value { color: #e2e8f0; font-size: 14px; font-weight: 500; }
-        .card-sm { background: #1a1025; border: 1px solid #2d1f42; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; }
+        .card-sm {
+            background: #1a1025;
+            border: 1px solid #2d1f42;
+            border-radius: 16px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        .week-bar {
+            display: flex;
+            gap: 6px;
+            margin-top: 12px;
+            align-items: flex-end;
+            height: 48px;
+        }
+        .week-day {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .week-day-bar {
+            width: 100%;
+            border-radius: 4px;
+            transition: height 0.3s;
+        }
+        .week-day-label {
+            color: #64748b;
+            font-size: 9px;
+            letter-spacing: 0.3px;
+        }
         #history-bar { display: flex; gap: 3px; align-items: flex-end; height: 32px; margin-top: 10px; }
         #footer-text { color: #2d1f42; font-size: 12px; text-align: center; }
+        .streak {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(168,85,247,0.1);
+            border: 1px solid rgba(168,85,247,0.2);
+            border-radius: 20px;
+            padding: 4px 12px;
+            margin-top: 8px;
+        }
+        .streak-text { color: #a855f7; font-size: 13px; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -78,6 +147,10 @@
             <span class="logo-text">MPA VPN</span>
         </div>
         <p class="subtitle">System Status</p>
+        <div class="streak" id="streak-badge" style="display:none">
+            <span>🔥</span>
+            <span class="streak-text" id="streak-text">0 дней без сбоев</span>
+        </div>
     </div>
 
     <div class="card" id="main-card">
@@ -87,6 +160,7 @@
                 <p id="status-text">Checking...</p>
             </div>
             <div class="dot-wrap" id="dot-wrap">
+                <div class="pulse" id="pulse"></div>
                 <div class="dot" id="dot"></div>
             </div>
         </div>
@@ -104,15 +178,20 @@
                 <p class="meta-value" id="last-check">—</p>
             </div>
             <div>
-                <p class="meta-label">UPTIME</p>
+                <p class="meta-label">UPTIME TODAY</p>
                 <p class="meta-value" id="uptime-text">—</p>
             </div>
         </div>
     </div>
 
     <div class="card-sm">
-        <p class="meta-label">HISTORY (30 CHECKS)</p>
+        <p class="meta-label">ИСТОРИЯ (30 ПРОВЕРОК)</p>
         <div id="history-bar"></div>
+    </div>
+
+    <div class="card-sm">
+        <p class="meta-label">НЕДЕЛЯ</p>
+        <div class="week-bar" id="week-bar"></div>
     </div>
 
     <p id="footer-text">Refreshes every 60 seconds</p>
@@ -120,66 +199,79 @@
 </div>
 
 <script>
-const UPSTASH_URL = "https://dominant-tortoise-117825.upstash.io/get/last_seen";
-const UPSTASH_TOKEN = "ggAAAAAAAcxBAAIgcDEXUJ2U4G-fwQyMtgpBOfqlSdIMRbK9x7vrEadr0Rm8lg";
-
+const UPSTASH_BASE = "https://dominant-tortoise-117825.upstash.io";
+const TOKEN = "ggAAAAAAAcxBAAIgcDEXUJ2U4G-fwQyMtgpBOfqlSdIMRbK9x7vrEadr0Rm8lg";
 const ONLINE_COLOR = '#a855f7';
 const OFFLINE_COLOR = '#ef4444';
+const MAX_TICKS_PER_DAY = 1440;
 
 let checks = [];
 
-async function checkStatus() {
-    try {
-        const r = await fetch(UPSTASH_URL, {
-            headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` }
-        });
-        const data = await r.json();
-        const lastSeen = parseInt(data.result || 0);
-        const now = Date.now();
-        const diff = now - lastSeen;
-        const online = diff < 90000;
+function getDateStr(offsetDays = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() - offsetDays);
+    return d.toISOString().split('T')[0];
+}
 
-        checks.push(online);
-        if (checks.length > 30) checks.shift();
+function getDayLabel(offsetDays) {
+    const days = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+    const d = new Date();
+    d.setDate(d.getDate() - offsetDays);
+    return days[d.getDay()];
+}
 
-        const statusText = document.getElementById('status-text');
-        const dotWrap = document.getElementById('dot-wrap');
-        const dot = document.getElementById('dot');
-        const mainCard = document.getElementById('main-card');
-        const lastCheck = document.getElementById('last-check');
-        const uptimeText = document.getElementById('uptime-text');
+async function fetchUpstash(path) {
+    const r = await fetch(`${UPSTASH_BASE}${path}`, {
+        headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    return r.json();
+}
 
-        if (online) {
-            statusText.textContent = 'Online';
-            statusText.style.color = ONLINE_COLOR;
-            dotWrap.style.background = 'rgba(168,85,247,0.15)';
-            dotWrap.style.border = '1px solid rgba(168,85,247,0.3)';
-            dot.style.background = ONLINE_COLOR;
-            mainCard.style.borderColor = 'rgba(168,85,247,0.25)';
-        } else {
-            statusText.textContent = 'Offline';
-            statusText.style.color = OFFLINE_COLOR;
-            dotWrap.style.background = 'rgba(239,68,68,0.15)';
-            dotWrap.style.border = '1px solid rgba(239,68,68,0.3)';
-            dot.style.background = OFFLINE_COLOR;
-            mainCard.style.borderColor = 'rgba(239,68,68,0.2)';
+async function getWeekData() {
+    const results = [];
+    for (let i = 6; i >= 0; i--) {
+        const day = getDateStr(i);
+        try {
+            const data = await fetchUpstash(`/get/uptime_${day}`);
+            const ticks = parseInt(data.result || 0);
+            const pct = Math.min(100, Math.round(ticks / MAX_TICKS_PER_DAY * 100));
+            results.push({ label: getDayLabel(i), pct, isToday: i === 0 });
+        } catch {
+            results.push({ label: getDayLabel(i), pct: 0, isToday: i === 0 });
         }
-
-        const secs = Math.round(diff / 1000);
-        lastCheck.textContent = secs < 60 ? `${secs}s ago` : `${Math.round(secs / 60)}m ago`;
-
-        const upPct = checks.length
-            ? Math.round(checks.filter(Boolean).length / checks.length * 100)
-            : 100;
-        uptimeText.textContent = `${upPct}%`;
-
-        renderHistory();
-        document.getElementById('footer-text').textContent =
-            'Last refreshed: ' + new Date().toLocaleTimeString();
-
-    } catch (e) {
-        document.getElementById('status-text').textContent = 'Unknown';
     }
+    return results;
+}
+
+function renderWeek(weekData) {
+    const bar = document.getElementById('week-bar');
+    bar.innerHTML = '';
+    weekData.forEach(day => {
+        const wrap = document.createElement('div');
+        wrap.className = 'week-day';
+
+        const b = document.createElement('div');
+        b.className = 'week-day-bar';
+        const h = Math.max(4, Math.round(day.pct / 100 * 40));
+        b.style.cssText = `height:${h}px;background:${day.pct > 80 ? ONLINE_COLOR : day.pct > 0 ? '#f59e0b' : '#ef4444'};opacity:${day.isToday ? 1 : 0.6};`;
+
+        const label = document.createElement('div');
+        label.className = 'week-day-label';
+        label.textContent = day.label;
+
+        wrap.appendChild(b);
+        wrap.appendChild(label);
+        bar.appendChild(wrap);
+    });
+}
+
+function calcStreak(weekData) {
+    let streak = 0;
+    for (let i = weekData.length - 1; i >= 0; i--) {
+        if (weekData[i].pct > 80) streak++;
+        else break;
+    }
+    return streak;
 }
 
 function renderHistory() {
@@ -201,7 +293,71 @@ function renderHistory() {
     }
 }
 
-renderHistory();
+async function checkStatus() {
+    try {
+        const data = await fetchUpstash('/get/last_seen');
+        const lastSeen = parseInt(data.result || 0);
+        const now = Date.now();
+        const diff = now - lastSeen;
+        const online = diff < 90000;
+
+        checks.push(online);
+        if (checks.length > 30) checks.shift();
+
+        const statusText = document.getElementById('status-text');
+        const dotWrap = document.getElementById('dot-wrap');
+        const dot = document.getElementById('dot');
+        const pulse = document.getElementById('pulse');
+        const mainCard = document.getElementById('main-card');
+        const lastCheck = document.getElementById('last-check');
+        const uptimeText = document.getElementById('uptime-text');
+
+        if (online) {
+            statusText.textContent = 'Online';
+            statusText.style.color = ONLINE_COLOR;
+            dotWrap.style.background = 'rgba(168,85,247,0.15)';
+            dotWrap.style.border = '1px solid rgba(168,85,247,0.3)';
+            dot.style.background = ONLINE_COLOR;
+            pulse.style.background = ONLINE_COLOR;
+            pulse.classList.add('pulse-active');
+            mainCard.style.borderColor = 'rgba(168,85,247,0.25)';
+        } else {
+            statusText.textContent = 'Offline';
+            statusText.style.color = OFFLINE_COLOR;
+            dotWrap.style.background = 'rgba(239,68,68,0.15)';
+            dotWrap.style.border = '1px solid rgba(239,68,68,0.3)';
+            dot.style.background = OFFLINE_COLOR;
+            pulse.style.background = 'transparent';
+            pulse.classList.remove('pulse-active');
+            mainCard.style.borderColor = 'rgba(239,68,68,0.2)';
+        }
+
+        const secs = Math.round(diff / 1000);
+        lastCheck.textContent = secs < 60 ? `${secs}s ago` : `${Math.round(secs / 60)}m ago`;
+
+        const upPct = checks.length
+            ? Math.round(checks.filter(Boolean).length / checks.length * 100)
+            : 100;
+        uptimeText.textContent = `${upPct}%`;
+
+        renderHistory();
+        document.getElementById('footer-text').textContent =
+            'Last refreshed: ' + new Date().toLocaleTimeString();
+
+        const weekData = await getWeekData();
+        renderWeek(weekData);
+
+        const streak = calcStreak(weekData);
+        if (streak > 0) {
+            document.getElementById('streak-badge').style.display = 'inline-flex';
+            document.getElementById('streak-text').textContent = `${streak} ${streak === 1 ? 'день' : streak < 5 ? 'дня' : 'дней'} без сбоев`;
+        }
+
+    } catch (e) {
+        document.getElementById('status-text').textContent = 'Unknown';
+    }
+}
+
 checkStatus();
 setInterval(checkStatus, 60000);
 </script>
